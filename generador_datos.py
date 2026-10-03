@@ -20,100 +20,88 @@ conexion = pymysql.connect(
 )
 cursor = conexion.cursor()
 
-# ═══════════════════════════════════════════════════════════════
-# PASO 2: LEER EL CATÁLOGO REAL (libros + materias)
-# El JOIN une libros con materias para saber qué libro corresponde
-# a cada materia. El WHERE ignora registros borrados (deleted_at).
-# ═══════════════════════════════════════════════════════════════
+# 2. Leer los TEMAS REALES ordenados por secuencia (orden)
 cursor.execute("""
-    SELECT l.id, l.nombre, l.materia_id, m.nombre
-    FROM libros l
-    JOIN materias m ON l.materia_id = m.id
-    WHERE l.deleted_at IS NULL AND m.deleted_at IS NULL
+    SELECT t.id, t.nombre, t.materia_id, m.nombre as materia_nombre, t.paginas_libro, t.orden
+    FROM temas t
+    JOIN materias m ON t.materia_id = m.id
+    WHERE t.deleted_at IS NULL AND m.deleted_at IS NULL
+    ORDER BY t.materia_id, t.orden ASC
 """)
-catalogo = cursor.fetchall()   # Lista de tuplas: (libro_id, libro_nombre, materia_id, materia_nombre)
+temas = cursor.fetchall()
 
-# Imprimimos el catálogo para VERIFICAR que leímos tu BD real
-print("=== CATÁLOGO LEÍDO ===")
-for c in catalogo:
-    print(f"- Libro #{c[0]}: {c[1]}  (materia: {c[3]})")
-
-# ═══════════════════════════════════════════════════════════════
-# PASO 3: LEER LOS 20 ESTUDIANTES REALES DE TU BD
-# El JOIN une estudiantes con users, porque el nombre y apellido
-# están en la tabla users (estudiantes solo guarda el user_id).
-# ═══════════════════════════════════════════════════════════════
+# 3. Leer los 20 estudiantes reales
 cursor.execute("""
     SELECT e.id, u.nombre, u.apellido_paterno
-    FROM estudiantes e
-    JOIN users u ON e.user_id = u.id
+    FROM estudiantes e JOIN users u ON e.user_id = u.id
     WHERE e.deleted_at IS NULL
 """)
-estudiantes = cursor.fetchall()   # Lista de tuplas: (estudiante_id, nombre, apellido)
-conexion.close()                  # Cerramos la conexión: ya tenemos todo lo real
+estudiantes = cursor.fetchall()
+conexion.close()
 
-print(f"\n=== ESTUDIANTES DE TU BD: {len(estudiantes)} ===")
+print(f"=== TEMAS CARGADOS: {len(temas)} ===")
+print(f"=== ESTUDIANTES: {len(estudiantes)} ===")
 
-# ═══════════════════════════════════════════════════════════════
-# PASO 4: GENERAR LOS HISTORIALES SIMULADOS (el "simulador")
-# ═══════════════════════════════════════════════════════════════
-random.seed(42)   # Semilla fija => mismos datos cada vez que corras (reproducibilidad)
-filas = []        # Aquí acumularemos cada fila del historial
-TAREAS_POR_COMBINACION = 15   # 15 tareas por cada (estudiante + materia)
-                              # Total: 20 estudiantes × 5 materias × 15 = 1500 filas
+# 4. Simulación del historial académico
+random.seed(42) # Reproducibilidad
+filas = []
 
-# Bucle 1: recorre cada libro/materia REAL de tu catálogo
-for libro_id, libro_nombre, materia_id, materia_nombre in catalogo:
+for est_id, est_nombre, est_apellido in estudiantes:
+    nombre_completo = f"{est_nombre} {est_apellido}"
+    
+    # Variable para recordar cómo le fue en el tema anterior (correlación secuencial)
+    # Empieza en 70 (un estudiante promedio comienza bien)
+    rendimiento_previo = 70 
 
-    # Bucle 2: recorre cada estudiante REAL de tu BD
-    for est_id, est_nombre, est_apellido in estudiantes:
-
-        # Bucle 3: simula 15 tareas para esta combinación
-        for i in range(TAREAS_POR_COMBINACION):
-
-            # Nota inicial reprobatoria (entre 30 y 50)
-            nota_inicial = random.randint(30, 50)
-
-            # ¿El estudiante leyó el resumen después de reprobar? (50% de probabilidad)
-            leyo = random.random() < 0.5
-
-            # ── EL PATRÓN OCULTO que el ML deberá descubrir solo ──
-            if leyo:
-                mejora = random.randint(25, 40)   # Leer el resumen ayuda MUCHO
-            else:
-                mejora = random.randint(0, 10)    # No leer casi no ayuda
-
-            # La nota final no puede pasar de 100
-            nota_final = min(nota_inicial + mejora, 100)
-
-            # Armamos la fila con datos REALES (ids y nombres) + notas SIMULADAS
+    for tema_id, tema_nombre, materia_id, materia_nombre, paginas_libro, orden in temas:
+        
+        # ¿El estudiante leyó el material de ESTE tema antes de que empezara? (50% probabilidad)
+        leyo_tema = random.random() < 0.5
+        
+        # ── EL PATRÓN OCULTO QUE EL ML DEBE APRENDER ──
+        # El bono por leer se suma al rendimiento base del estudiante
+        if leyo_tema:
+            bono_lectura = random.randint(20, 35)  # Leer ayuda MUCHO
+        else:
+            bono_lectura = random.randint(-5, 10)  # No leer casi no ayuda (o baja un poco)
+        
+        # El rendimiento en este tema depende de: cómo le fue antes + si leyó + un poco de azar
+        rendimiento_tema = rendimiento_previo + bono_lectura + random.randint(-10, 10)
+        rendimiento_tema = max(30, min(100, rendimiento_tema)) # Limitar entre 30 y 100
+        
+        # Guardamos este rendimiento para que influya en el SIGUIENTE tema
+        rendimiento_previo = rendimiento_tema
+        
+        # ── GENERAR TAREAS VARIABLES PARA ESTE TEMA (entre 1 y 3 tareas) ──
+        num_tareas = random.randint(1, 3)
+        
+        for num_tarea in range(1, num_tareas + 1):
+            # Cada tarea varía un poco alrededor del rendimiento del tema
+            nota_tarea = rendimiento_tema + random.randint(-8, 8)
+            nota_tarea = max(0, min(100, round(nota_tarea, 1))) # Nota entre 0 y 100, con 1 decimal
+            
             filas.append({
-                "estudiante_id": est_id,                              # ID real de tu BD
-                "estudiante_nombre": f"{est_nombre} {est_apellido}",  # Nombre real (ficticio pero de tu sistema)
-                "materia_id": materia_id,                             # ID real
-                "materia_nombre": materia_nombre,                     # Nombre real
-                "libro_id": libro_id,                                 # ID real
-                "libro_nombre": libro_nombre,                         # Nombre real
-                "leyo_libro": int(leyo),                              # 1 = leyó, 0 = no leyó
-                "nota_inicial": nota_inicial,                         # Simulada
-                "nota_final": nota_final,                             # Simulada
-                "mejora": nota_final - nota_inicial,                  # Cuánto mejoró
+                "estudiante_id": est_id,
+                "estudiante_nombre": nombre_completo,
+                "materia_id": materia_id,
+                "materia_nombre": materia_nombre,
+                "tema_id": tema_id,
+                "tema_nombre": tema_nombre,
+                "orden_tema": orden,
+                "paginas_libro": paginas_libro,
+                "leyo_tema": int(leyo_tema),          # 1 = leyó, 0 = no leyó
+                "numero_tarea_en_tema": num_tarea,
+                "nota": nota_tarea,
             })
 
-# ═══════════════════════════════════════════════════════════════
-# PASO 5: CONVERTIR A TABLA Y GUARDAR EN CSV
-# index=False  → no guarda el número de fila de pandas
-# utf-8-sig    → conserva tildes/ñ y abre bien en Excel
-# ═══════════════════════════════════════════════════════════════
+# 5. Guardar en CSV
 datos = pd.DataFrame(filas)
 datos.to_csv("datos_sinteticos.csv", index=False, encoding="utf-8-sig")
 
-# ═══════════════════════════════════════════════════════════════
-# PASO 6: RESUMEN FINAL (comprobamos que el patrón oculto existe)
-# groupby agrupa por "leyó" (1) y "no leyó" (0) y promedia la mejora
-# ═══════════════════════════════════════════════════════════════
-print("\n=== RESUMEN DEL SIMULADOR ===")
-print(f"Total de historiales simulados: {len(datos)}")
-print("\nMejora promedio según si leyó o no:")
-print(datos.groupby("leyo_libro")["mejora"].mean().round(1))
-print("\n✅ Datos sintéticos guardados en datos_sinteticos.csv")
+# 6. Resumen para verificar el patrón
+print("\n=== RESUMEN DEL SIMULADOR v5 ===")
+print(f"Total de tareas simuladas: {len(datos)}")
+print("\nPromedio de notas por tema según si leyó el material o no:")
+promedios = datos.groupby("leyo_tema")["nota"].mean().round(1)
+print(promedios)
+print("\n✅ CSV generado con tareas variables (1 a 3 por tema) y correlación secuencial.")
