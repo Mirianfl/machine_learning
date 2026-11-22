@@ -1,0 +1,35 @@
+{
+  "version": "2.0.0",
+  "fecha_entrenamiento": "2026-11-22T06:45:00.509408+00:00",
+  "origen_modelo": "datos_sinteticos_v6_temas",
+  "algoritmo": "RandomForestRegressor(n_estimators=100, random_state=42)",
+  "total_registros": 500,
+  "train_size": 400,
+  "test_size": 100,
+  "mae": 2.67,
+  "r2": 0.8781,
+  "feature_importances": {
+    "peso_nota_previa": 0.4454,
+    "peso_repaso_tema": 0.5122,
+    "peso_orden_tema": 0.0318,
+    "peso_materia": 0.0105
+  },
+  "materias_entrenadas": [
+    1,
+    2
+  ],
+  "temas_entrenados_orden": [
+    1,
+    2,
+    3,
+    4,
+    5,
+    6
+  ],
+  "columnas_features": [
+    "materia_id",
+    "tema_orden",
+    "nota_previa",
+    "leyo_material"
+  ]
+}
