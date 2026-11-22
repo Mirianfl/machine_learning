@@ -351,3 +351,4 @@ php artisan optimize
 * **Institución:** Universidad Pública de El Alto (UPEA) — Carrera de Psicología.
 * **Proyecto:** Plataforma Académica Preuniversitaria y Asistente Pedagógico Inteligente.
 * **Versión del Microservicio:** 2.0.0 (Producción).
+
